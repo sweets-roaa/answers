@@ -19,7 +19,14 @@ def save_ans():
     data = request.get_json(force=True)
     q_index = int(data.get("index", -1))
     ans = int(data.get("answer", -1))
+
     if 0 <= q_index < len(answers):
+        # 👇 تحقق: هل أول إجابة بتنضاف؟
+        if all(a == -1 for a in answers):
+            # صفر كل الإجابات أول مرة
+            answers = [-1] * NUM_QUESTIONS
+
+        # سجل الإجابة الجديدة
         answers[q_index] = ans
         update_id += 1  # 🔥 كل تعديل يزيد رقم التحديث
         return jsonify({
@@ -30,29 +37,3 @@ def save_ans():
         }), 200
     else:
         return jsonify({"status": "error", "msg": "invalid index"}), 400
-
-
-@app.route("/get_ans", methods=["GET"])
-def get_ans():
-    return jsonify({
-        "answers": answers,
-        "update_id": update_id,
-        "timestamp": time.time()
-    })
-
-
-@app.route("/reset", methods=["POST"])
-def reset():
-    global answers, update_id
-    answers = [-1] * NUM_QUESTIONS
-    update_id += 1  # كل عملية reset تعتبر تحديث جديد
-    return jsonify({
-        "status": "reset",
-        "answers": answers,
-        "update_id": update_id,
-        "timestamp": time.time()
-    })
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
