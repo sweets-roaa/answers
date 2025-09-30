@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import time
+import threading
 
 app = Flask(__name__)
 CORS(app)
@@ -10,35 +11,51 @@ CORS(app)
 NUM_QUESTIONS = int(os.getenv("NUM_QUESTIONS", "5"))
 
 answers = [-1] * NUM_QUESTIONS
-update_id = 0  # 🔑 رقم إصدار للتحديثات
+update_id = 0
+first_answer = True
+reset_timer = None  # ⏱️ مؤقت لإعادة التصفير التلقائي
+
+
+def schedule_reset(delay=4):
+    """يعمل reset بعد delay ثواني"""
+    global reset_timer
+
+    # لو فيه مؤقت قديم، لغيه
+    if reset_timer and reset_timer.is_alive():
+        reset_timer.cancel()
+
+    def do_reset():
+        global answers, update_id, first_answer
+        answers = [-1] * NUM_QUESTIONS
+        update_id += 1
+        first_answer = True
+        print("✅ تم عمل reset تلقائي بعد اكتمال جميع الإجابات.")
+
+    reset_timer = threading.Timer(delay, do_reset)
+    reset_timer.start()
 
 
 @app.route("/save_ans", methods=["POST"])
 def save_ans():
-    global answers, update_id
+    global answers, update_id, first_answer
     data = request.get_json(force=True)
     q_index = int(data.get("index", -1))
     ans = int(data.get("answer", -1))
 
     if 0 <= q_index < len(answers):
-        # 👇 تحقق إذا هاي أول إجابة جديدة بالمحاولة
-        if all(a == -1 for a in answers):
-            # كلهم فاضيين → بداية محاولة جديدة
+        # أول إجابة بالمحاولة
+        if first_answer:
             answers = [-1] * NUM_QUESTIONS
-            answers[q_index] = ans
-        elif sum(a != -1 for a in answers) == 0:
-            # ما في ولا إجابة محفوظة (احتياط)
-            answers = [-1] * NUM_QUESTIONS
-            answers[q_index] = ans
-        elif sum(a != -1 for a in answers) == 1 and answers[q_index] == -1:
-            # لو الطالب غيّر أول خانة، نمسح الباقي ونخلي بس الأولى
-            answers = [-1] * NUM_QUESTIONS
-            answers[q_index] = ans
-        else:
-            # باقي الحالات → خزّن الجواب الجديد عادي
-            answers[q_index] = ans
+            first_answer = False
 
+        # خزّن الإجابة
+        answers[q_index] = ans
         update_id += 1
+
+        # 👇 إذا امتلأت جميع الخانات → جهّز reset بعد 4 ثواني
+        if all(a != -1 for a in answers):
+            schedule_reset(4)
+
         return jsonify({
             "status": "ok",
             "answers": answers,
@@ -60,9 +77,10 @@ def get_ans():
 
 @app.route("/reset", methods=["POST"])
 def reset():
-    global answers, update_id
+    global answers, update_id, first_answer
     answers = [-1] * NUM_QUESTIONS
-    update_id += 1  # كل عملية reset تعتبر تحديث جديد
+    update_id += 1
+    first_answer = True
     return jsonify({
         "status": "reset",
         "answers": answers,
