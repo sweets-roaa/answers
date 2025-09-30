@@ -21,14 +21,24 @@ def save_ans():
     ans = int(data.get("answer", -1))
 
     if 0 <= q_index < len(answers):
-        # 👇 تحقق: هل أول إجابة بتنضاف (يعني كلهم -1)؟
+        # 👇 تحقق إذا هاي أول إجابة جديدة بالمحاولة
         if all(a == -1 for a in answers):
-            # صفر كل الإجابات أول مرة
+            # كلهم فاضيين → بداية محاولة جديدة
             answers = [-1] * NUM_QUESTIONS
+            answers[q_index] = ans
+        elif sum(a != -1 for a in answers) == 0:
+            # ما في ولا إجابة محفوظة (احتياط)
+            answers = [-1] * NUM_QUESTIONS
+            answers[q_index] = ans
+        elif sum(a != -1 for a in answers) == 1 and answers[q_index] == -1:
+            # لو الطالب غيّر أول خانة، نمسح الباقي ونخلي بس الأولى
+            answers = [-1] * NUM_QUESTIONS
+            answers[q_index] = ans
+        else:
+            # باقي الحالات → خزّن الجواب الجديد عادي
+            answers[q_index] = ans
 
-        # سجل الإجابة الجديدة
-        answers[q_index] = ans
-        update_id += 1  # 🔥 كل تعديل يزيد رقم التحديث
+        update_id += 1
         return jsonify({
             "status": "ok",
             "answers": answers,
