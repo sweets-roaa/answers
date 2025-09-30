@@ -24,3 +24,19 @@ def save_ans():
     else:
         app.logger.warning(f"Invalid index {q_index} in payload")
         return jsonify({"status": "error", "msg": "invalid index"}), 400
+
+@app.route("/get_ans", methods=["GET"])
+def get_ans():
+    """إرجاع آخر حالة للأجوبة"""
+    return jsonify({"answers": answers})
+
+@app.route("/reset", methods=["POST"])
+def reset():
+    """إعادة تعيين كل الأجوبة لقيمة -1"""
+    global answers
+    answers = [-1] * NUM_QUESTIONS
+    app.logger.info("Answers reset")
+    return jsonify({"status": "reset", "answers": answers})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
