@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import time
-import threading
+from threading import Timer
 
 app = Flask(__name__)
 CORS(app)
@@ -12,49 +12,41 @@ NUM_QUESTIONS = int(os.getenv("NUM_QUESTIONS", "5"))
 
 answers = [-1] * NUM_QUESTIONS
 update_id = 0
-first_answer = True
-reset_timer = None  # ⏱️ مؤقت لإعادة التصفير التلقائي
+reset_timer = None  # ⏳ مؤقت لإعادة التعيين
 
 
-def schedule_reset(delay=4):
-    """يعمل reset بعد delay ثواني"""
-    global reset_timer
-
-    # لو فيه مؤقت قديم، لغيه
-    if reset_timer and reset_timer.is_alive():
-        reset_timer.cancel()
-
-    def do_reset():
-        global answers, update_id, first_answer
-        answers = [-1] * NUM_QUESTIONS
-        update_id += 1
-        first_answer = True
-        print("✅ تم عمل reset تلقائي بعد اكتمال جميع الإجابات.")
-
-    reset_timer = threading.Timer(delay, do_reset)
-    reset_timer.start()
+# 🛠️ دالة تنفيذ reset
+def do_reset():
+    global answers, update_id
+    answers = [-1] * NUM_QUESTIONS
+    update_id += 1
+    print("✅ Reset done automatically")
 
 
 @app.route("/save_ans", methods=["POST"])
 def save_ans():
-    global answers, update_id, first_answer
+    global answers, update_id, reset_timer
     data = request.get_json(force=True)
     q_index = int(data.get("index", -1))
     ans = int(data.get("answer", -1))
 
     if 0 <= q_index < len(answers):
-        # أول إجابة بالمحاولة
-        if first_answer:
+        # 👇 إذا هاي أول إجابة جديدة → صفّر كل شيء
+        if all(a == -1 for a in answers):
             answers = [-1] * NUM_QUESTIONS
-            first_answer = False
 
-        # خزّن الإجابة
+        # سجل الإجابة
         answers[q_index] = ans
         update_id += 1
 
-        # 👇 إذا امتلأت جميع الخانات → جهّز reset بعد 4 ثواني
-        if all(a != -1 for a in answers):
-            schedule_reset(4)
+        # 🕒 تحضير reset:
+        # - إذا امتلأت كل الخانات
+        # - أو إذا آخر خانة وصلها جواب
+        if all(a != -1 for a in answers) or (q_index == NUM_QUESTIONS - 1 and ans != -1):
+            if reset_timer:
+                reset_timer.cancel()
+            reset_timer = Timer(4.0, do_reset)
+            reset_timer.start()
 
         return jsonify({
             "status": "ok",
@@ -77,21 +69,17 @@ def get_ans():
 
 @app.route("/reset", methods=["POST"])
 def reset():
-    global answers, update_id, first_answer
+    global answers, update_id, reset_timer
     answers = [-1] * NUM_QUESTIONS
     update_id += 1
-    first_answer = True
+    if reset_timer:
+        reset_timer.cancel()
     return jsonify({
         "status": "reset",
         "answers": answers,
         "update_id": update_id,
         "timestamp": time.time()
     })
-
-
-@app.route("/", methods=["GET"])
-def home():
-    return jsonify({"status": "ok", "msg": "server running"})
 
 
 if __name__ == "__main__":
