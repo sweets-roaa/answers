@@ -45,7 +45,7 @@ def save_ans():
         if all(a != -1 for a in answers) or (q_index == NUM_QUESTIONS - 1 and ans != -1):
             if reset_timer:
                 reset_timer.cancel()
-            reset_timer = Timer(4.0, do_reset)
+            reset_timer = Timer(20, do_reset)
             reset_timer.start()
 
         return jsonify({
@@ -84,3 +84,4 @@ def reset():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+
